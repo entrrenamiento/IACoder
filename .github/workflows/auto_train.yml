@@ -6,10 +6,17 @@ on:
     paths:
       - 'IA.cpp'
       - 'repositorios.txt'
-      - '.github/workflows/auto_train.yml'
   schedule:
-    - cron: '0 */4 * * *' # Entrena 3 repos + destila del Profesor LLM cada 4 horas!
-  workflow_dispatch:      # Boton manual para correrlo ahora mismo
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+
+# SEMAFORO ANTI-CHOQUES: Si hay 2 entrenamientos a la vez, hace fila sin dar error!
+concurrency:
+  group: kka-titan-training-queue
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
   contents: write
@@ -21,7 +28,7 @@ jobs:
       - name: 📥 1. Descargar tu Repositorio IACoder
         uses: actions/checkout@v4
 
-      - name: ⚙️ 2. Compilar IA.cpp (TITAN-12B) directo en Linux
+      - name: ⚙️ 2. Compilar IA.cpp (TITAN-12B) en Linux
         run: g++ -O3 IA.cpp -o kka_trainer
 
       - name: 🎓 3. Destilar Conocimiento del Profesor LLM Gigante (OSDev / C++ Ring-0)
@@ -36,28 +43,24 @@ jobs:
                                      g_klein_v24, MAX_EXPERT_BLOCKS_RAM);
               cargar_cerebro_completo("cerebro_omega.kkaf");
               char out[4096];
-              //En cada turno el servidor de GitHub destila nuevas arquitecturas desde el Profesor LLM:
               g_ia_titan.responder_con_inteligencia_maxima("Implementar Page Fault Handler ISR 14 en C++ freestanding x86_64", true, out, sizeof(out));
               g_ia_titan.responder_con_inteligencia_maxima("Implementar AHCI SATA y NVMe PCIe BAR0 scan en C++ Ring-0", true, out, sizeof(out));
               g_ia_titan.responder_con_inteligencia_maxima("Implementar Allocator Slab/Buddy en C++ sin malloc para Kernel", true, out, sizeof(out));
               guardar_cerebro_completo("cerebro_omega.kkaf");
-              printf("[Destilador Cloud] Destilaciones LLM acumuladas: %u | Funciones en Boveda: %u\n",
-                     g_master_v22.total_destilaciones_llm, g_master_v22.total_funciones_vault);
               return 0;
           }
           EOF
-          g++ -O3 distill_llm.cpp -o kka_distill
+          g++ -O3 distill_llm.cpp -o kka_distill || true
           ./kka_distill || true
           rm -f distill_llm.cpp kka_distill
 
-      - name: 📚 4. Leer siguientes 3 repositorios de 'repositorios.txt' y Extraer Funciones Completas
+      - name: 📚 4. Leer siguientes 3 repositorios de 'repositorios.txt' y Entrenar
         run: |
           if [ ! -f repositorios.txt ]; then
             echo "limine-bootloader/limine" > repositorios.txt
-            echo "id-Software/Quake-III-Arena" >> repositorios.txt
           fi
 
-          grep -v '^[[:space:]]*#' repositorios.txt | grep -v '^[[:space:]]*$' | tr -d '\r' > /tmp/clean_repos.txt
+          grep -v '^[[:space:]]*#' repositorios.txt | grep -v '^[[:space:]]*$' | tr -d '\r' > /tmp/clean_repos.txt || true
           TOTAL_REPOS=$(wc -l < /tmp/clean_repos.txt)
 
           CURSOR=1
@@ -65,9 +68,7 @@ jobs:
             CURSOR=$(cat progreso_repos.txt | tr -d '[:space:]')
           fi
 
-          if [ "$CURSOR" -gt "$TOTAL_REPOS" ]; then
-            curl -s "https://api.github.com/search/repositories?q=language:cpp+topic:osdev&sort=stars&per_page=10" \
-              | grep -o '"full_name": *"[^"]*"' | cut -d'"' -f4 >> repositorios.txt || true
+          if [ -z "$CURSOR" ] || [ "$CURSOR" -gt "$TOTAL_REPOS" ]; then
             CURSOR=1
           fi
 
@@ -90,9 +91,9 @@ jobs:
             REPOS_APRENDIDOS="$REPOS_APRENDIDOS $SLUG"
           done
 
-          FILES=$(find /tmp/harvest -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" -o -name "*.rs" -o -name "*.zig" -o -name "*.asm" \) | head -n 300)
+          FILES=$(find /tmp/harvest -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) | head -n 300)
           if [ -n "$FILES" ]; then
-            ./kka_trainer $FILES
+            ./kka_trainer $FILES || true
           fi
 
           NEXT_CURSOR=$((END_LINE + 1))
@@ -100,12 +101,13 @@ jobs:
           echo "$REPOS_APRENDIDOS" > /tmp/trained_names.txt
           rm -f kka_trainer
 
-      - name: 💾 5. Guardar 'cerebro_omega.kkaf' (Lobulos + Boveda + Tensores Klein 2-Bit)
+      - name: 💾 5. Guardar 'cerebro_omega.kkaf' (Con Anti-Colision Git)
         run: |
           APRENDIDOS=$(cat /tmp/trained_names.txt || echo "lote")
           git config user.name "KKA-Zero TITAN Bot"
           git config user.email "kka-bot@users.noreply.github.com"
           git add cerebro_omega.kkaf progreso_repos.txt repositorios.txt
           git diff --staged --quiet || git commit -m "🧠 TITAN-12B [$APRENDIDOS] -> Cursor $(cat progreso_repos.txt)"
-          git push
+          git pull --rebase -X ours origin main || true
+          git push origin main
           

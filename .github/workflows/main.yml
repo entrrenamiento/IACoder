@@ -1,0 +1,84 @@
+name: 🧠 KKA-Zero Infinite Cloud Trainer (IACoder)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  schedule:
+    - cron: '0 */4 * * *' # Se auto-entrena gratis cada 4 horas al infinito!
+  workflow_dispatch:      # Boton manual para lanzarlo cuando quieras
+
+permissions:
+  contents: write         # Permiso para guardar el modelo entrenado en tu repo
+
+jobs:
+  train-ia-cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 1. Descargar tu repositorio IACoder
+        uses: actions/checkout@v4
+
+      - name: ⚙️ 2. Crear puente Linux y Compilar tu IA.cpp
+        run: |
+          cat << 'EOF' > cloud_trainer.cpp
+          #define main main_original_gui
+          #include "IA.cpp"
+          #undef main
+
+          int main(int argc, char** argv) {
+              g_ia_v22.inicializar(&g_master_v22, g_lobulos_v22, MAX_LOBULOS_RAM);
+              FILE* f_in = fopen("cerebro_omega.kkaf", "rb");
+              if (f_in) {
+                  KKAF_MasterBlock tmp;
+                  if (fread(&tmp, sizeof(KKAF_MasterBlock), 1, f_in) == 1 && tmp.magic == 0x4B4B413C) {
+                      g_master_v22 = tmp;
+                      if (g_master_v22.total_lobulos > MAX_LOBULOS_RAM) g_master_v22.total_lobulos = MAX_LOBULOS_RAM;
+                      fread(g_lobulos_v22, sizeof(KKAF_Lobulo4K), g_master_v22.total_lobulos, f_in);
+                  }
+                  fclose(f_in);
+              } else {
+                  g_ia_v22.entrenar_todos_los_datasets();
+              }
+
+              for (int i = 1; i < argc; i++) {
+                  FILE* fp = fopen(argv[i], "rb");
+                  if (fp) {
+                      char* buf = (char*)malloc(65536);
+                      if (buf) {
+                          size_t n = fread(buf, 1, 65535, fp);
+                          buf[n] = '\0';
+                          g_ia_v22.entrenar_stream_dominio(buf, LANG_CPP);
+                          free(buf);
+                      }
+                      fclose(fp);
+                  }
+              }
+
+              FILE* f_out = fopen("cerebro_omega.kkaf", "wb");
+              if (f_out) {
+                  fwrite(&g_master_v22, sizeof(KKAF_MasterBlock), 1, f_out);
+                  fwrite(g_lobulos_v22, sizeof(KKAF_Lobulo4K), g_master_v22.total_lobulos, f_out);
+                  fclose(f_out);
+              }
+              printf("[Cloud Trainer] Entrenamiento exitoso! Neuronas: %u | Lobulos 4KB: %u\n",
+                     g_master_v22.total_neuronas, g_master_v22.total_lobulos);
+              return 0;
+          }
+          EOF
+          g++ -O3 cloud_trainer.cpp -o kka_trainer
+
+      - name: 🌐 3. Clonar Repositorios de Sistemas Operativos, C++, Rust y ASM
+        run: |
+          mkdir -p /tmp/harvest
+          git clone --depth 1 https://github.com/limine-bootloader/limine.git /tmp/harvest/limine || true
+          git clone --depth 1 https://github.com/id-Software/Quake-III-Arena.git /tmp/harvest/quake3 || true
+          ./kka_trainer $(find /tmp/harvest -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" \) | head -n 150)
+          rm -f cloud_trainer.cpp kka_trainer
+
+      - name: 💾 4. Guardar el Cerebro Entrenado (cerebro_omega.kkaf) en tu Repo
+        run: |
+          git config user.name "KKA-Zero Bot"
+          git config user.email "kka-bot@users.noreply.github.com"
+          git add cerebro_omega.kkaf
+          git diff --staged --quiet || git commit -m "🧠 Auto-Train: cerebro_omega.kkaf actualizado"
+          git push
+          

@@ -1,23 +1,27 @@
-name: 🧠 KKA-Zero Infinite Cloud Trainer (IACoder)
+name: 🧠 KKA-Zero Infinite Queue Trainer (Lee repositorios.txt)
 
 on:
   push:
     branches: [ "main", "master" ]
+    paths:
+      - 'IA.cpp'
+      - 'repositorios.txt'
+      - '.github/workflows/auto_train.yml'
   schedule:
-    - cron: '0 */4 * * *' # Se auto-entrena gratis cada 4 horas al infinito!
-  workflow_dispatch:      # Boton manual para lanzarlo cuando quieras
+    - cron: '0 */4 * * *' # Avanza 3 repositorios nuevos de la lista cada 4 horas!
+  workflow_dispatch:      # Boton manual para avanzar un turno cuando quieras
 
 permissions:
-  contents: write         # Permiso para guardar el modelo entrenado en tu repo
+  contents: write
 
 jobs:
-  train-ia-cpp:
+  train-from-queue:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 1. Descargar tu repositorio IACoder
+      - name: 📥 1. Descargar tu Repositorio IACoder
         uses: actions/checkout@v4
 
-      - name: ⚙️ 2. Crear puente Linux y Compilar tu IA.cpp
+      - name: ⚙️ 2. Compilar tu IA.cpp con soporte multi-lenguaje
         run: |
           cat << 'EOF' > cloud_trainer.cpp
           #define main main_original_gui
@@ -39,6 +43,7 @@ jobs:
                   g_ia_v22.entrenar_todos_los_datasets();
               }
 
+              uint32_t archivos_leidos = 0;
               for (int i = 1; i < argc; i++) {
                   FILE* fp = fopen(argv[i], "rb");
                   if (fp) {
@@ -48,6 +53,7 @@ jobs:
                           buf[n] = '\0';
                           g_ia_v22.entrenar_stream_dominio(buf, LANG_CPP);
                           free(buf);
+                          archivos_leidos++;
                       }
                       fclose(fp);
                   }
@@ -59,25 +65,79 @@ jobs:
                   fwrite(g_lobulos_v22, sizeof(KKAF_Lobulo4K), g_master_v22.total_lobulos, f_out);
                   fclose(f_out);
               }
-              printf("[Cloud Trainer] Entrenamiento exitoso! Neuronas: %u | Lobulos 4KB: %u\n",
-                     g_master_v22.total_neuronas, g_master_v22.total_lobulos);
+              printf("[Cola KKA-Zero] Archivos procesados: %u | Neuronas totales: %u | Lobulos 4KB: %u\n",
+                     archivos_leidos, g_master_v22.total_neuronas, g_master_v22.total_lobulos);
               return 0;
           }
           EOF
           g++ -O3 cloud_trainer.cpp -o kka_trainer
 
-      - name: 🌐 3. Clonar Repositorios de Sistemas Operativos, C++, Rust y ASM
+      - name: 📚 3. Leer siguientes 3 repositorios de 'repositorios.txt' y Entrenar
         run: |
+          # Crear repositorios.txt por defecto si no existiera
+          if [ ! -f repositorios.txt ]; then
+            echo "limine-bootloader/limine" > repositorios.txt
+            echo "id-Software/Quake-III-Arena" >> repositorios.txt
+          fi
+
+          # Filtrar comentarios '#' y lineas vacias
+          grep -v '^[[:space:]]*#' repositorios.txt | grep -v '^[[:space:]]*$' | tr -d '\r' > /tmp/clean_repos.txt
+          TOTAL_REPOS=$(wc -l < /tmp/clean_repos.txt)
+
+          # Leer el cursor actual desde progreso_repos.txt (empieza en la linea 1)
+          CURSOR=1
+          if [ -f progreso_repos.txt ]; then
+            CURSOR=$(cat progreso_repos.txt | tr -d '[:space:]')
+          fi
+
+          # Si el cursor supero el final de la lista, auto-descubrimos nuevos repos en la API de GitHub y reiniciamos!
+          if [ "$CURSOR" -gt "$TOTAL_REPOS" ]; then
+            echo "🌐 Fin de la lista alcanzado. Buscando nuevos repositorios de OS/C++ en GitHub API..."
+            curl -s "https://api.github.com/search/repositories?q=language:cpp+topic:osdev&sort=stars&per_page=10" \
+              | grep -o '"full_name": *"[^"]*"' | cut -d'"' -f4 >> repositorios.txt || true
+            CURSOR=1
+          fi
+
+          BATCH_SIZE=3
+          END_LINE=$((CURSOR + BATCH_SIZE - 1))
+          echo "🎯 Entrenando repositorios desde la linea $CURSOR hasta $END_LINE (de $TOTAL_REPOS totales)..."
+
           mkdir -p /tmp/harvest
-          git clone --depth 1 https://github.com/limine-bootloader/limine.git /tmp/harvest/limine || true
-          git clone --depth 1 https://github.com/id-Software/Quake-III-Arena.git /tmp/harvest/quake3 || true
-          ./kka_trainer $(find /tmp/harvest -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" \) | head -n 150)
+          REPOS_APRENDIDOS=""
+
+          for R in $(sed -n "${CURSOR},${END_LINE}p" /tmp/clean_repos.txt); do
+            # Soportar tanto 'usuario/repo' como URL completa 'https://github.com/usuario/repo'
+            if echo "$R" | grep -q "^http"; then
+              URL="$R"
+              SLUG=$(echo "$R" | sed 's|https://github.com/||')
+            else
+              URL="https://github.com/$R.git"
+              SLUG="$R"
+            fi
+            SAFE_DIR=$(echo "$SLUG" | tr '/' '_')
+            echo "⬇️ Clonando $SLUG ..."
+            git clone --depth 1 --quiet "$URL" "/tmp/harvest/$SAFE_DIR" || true
+            REPOS_APRENDIDOS="$REPOS_APRENDIDOS $SLUG"
+          done
+
+          # Entrenar con hasta 250 archivos de codigo fuente de esos 3 repositorios
+          FILES=$(find /tmp/harvest -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" -o -name "*.rs" -o -name "*.zig" -o -name "*.asm" -o -name "*.s" \) | head -n 250)
+          if [ -n "$FILES" ]; then
+            ./kka_trainer $FILES
+          fi
+
+          # Guardar el nuevo cursor para el siguiente turno
+          NEXT_CURSOR=$((END_LINE + 1))
+          echo "$NEXT_CURSOR" > progreso_repos.txt
+          echo "$REPOS_APRENDIDOS" > /tmp/trained_names.txt
           rm -f cloud_trainer.cpp kka_trainer
 
-      - name: 💾 4. Guardar el Cerebro Entrenado (cerebro_omega.kkaf) en tu Repo
+      - name: 💾 4. Guardar 'cerebro_omega.kkaf' y 'progreso_repos.txt' en tu Repo
         run: |
-          git config user.name "KKA-Zero Bot"
+          APRENDIDOS=$(cat /tmp/trained_names.txt || echo "lote")
+          git config user.name "KKA-Zero Queue Bot"
           git config user.email "kka-bot@users.noreply.github.com"
-          git add cerebro_omega.kkaf
-          git diff --staged --quiet || git commit -m "🧠 Auto-Train: cerebro_omega.kkaf actualizado"
+          git add cerebro_omega.kkaf progreso_repos.txt repositorios.txt
+          git diff --staged --quiet || git commit -m "🧠 Auto-Train [$APRENDIDOS] -> Cursor en $(cat progreso_repos.txt)"
           git push
+          

@@ -1,4 +1,4 @@
-name: 🧠 KKA-Zero TITAN-12B Cloud Trainer & LLM Distiller
+name: 🧠 KKA-Zero Multi-Shard Infinite Cloud Trainer
 
 on:
   push:
@@ -7,12 +7,12 @@ on:
       - 'IA.cpp'
       - 'repositorios.txt'
   schedule:
-    - cron: '0 */4 * * *'
-  workflow_dispatch:
+    - cron: '0 */4 * * *' # Avanza 3 repositorios y guarda un nuevo Shard en /shards cada 4 horas!
+  workflow_dispatch:      # Boton manual para correrlo cuando quieras
 
-# SEMAFORO ANTI-CHOQUES: Si hay 2 entrenamientos a la vez, hace fila sin dar error!
+# SEMAFORO ANTI-CHOQUES: Evita que dos entrenamientos choquen al hacer git push
 concurrency:
-  group: kka-titan-training-queue
+  group: kka-multishard-training-queue
   cancel-in-progress: false
 
 env:
@@ -22,18 +22,27 @@ permissions:
   contents: write
 
 jobs:
-  titan-cloud-train:
+  multishard-cloud-train:
     runs-on: ubuntu-latest
     steps:
       - name: 📥 1. Descargar tu Repositorio IACoder
         uses: actions/checkout@v4
 
-      - name: ⚙️ 2. Compilar IA.cpp (TITAN-12B) en Linux
-        run: g++ -O3 IA.cpp -o kka_trainer
-
-      - name: 🎓 3. Destilar Conocimiento del Profesor LLM Gigante (OSDev / C++ Ring-0)
+      - name: ⚙️ 2. Preparar carpeta 'shards/' y Compilar IA.cpp en Linux
         run: |
-          cat << 'EOF' > distill_llm.cpp
+          mkdir -p shards
+          # Copiar temporalmente los shards previos para que IA.cpp conozca la numeracion actual
+          cp -n shards/cerebro_shard_*.kkaf . 2>/dev/null || true
+          g++ -O3 IA.cpp -o kka_trainer
+
+      - name: 🎓 3. Destilar Nuevas Arquitecturas del Profesor LLM Gigante
+        run: |
+          CURSOR_ACTUAL=1
+          if [ -f progreso_repos.txt ]; then
+            CURSOR_ACTUAL=$(cat progreso_repos.txt | tr -d '[:space:]')
+          fi
+
+          cat << EOF > distill_llm.cpp
           #define main main_ignore
           #include "IA.cpp"
           #undef main
@@ -43,9 +52,20 @@ jobs:
                                      g_klein_v24, MAX_EXPERT_BLOCKS_RAM);
               cargar_cerebro_completo("cerebro_omega.kkaf");
               char out[4096];
-              g_ia_titan.responder_con_inteligencia_maxima("Implementar Page Fault Handler ISR 14 en C++ freestanding x86_64", true, out, sizeof(out));
-              g_ia_titan.responder_con_inteligencia_maxima("Implementar AHCI SATA y NVMe PCIe BAR0 scan en C++ Ring-0", true, out, sizeof(out));
-              g_ia_titan.responder_con_inteligencia_maxima("Implementar Allocator Slab/Buddy en C++ sin malloc para Kernel", true, out, sizeof(out));
+              const char* temas_osdev[] = {
+                  "Implementar Page Fault Handler ISR 14 en C++ freestanding x86_64",
+                  "Implementar Driver NVMe M.2 colas Admin e I/O por DMA en C++ Ring-0",
+                  "Implementar Allocator Slab y Buddy System en C++ sin malloc para Kernel",
+                  "Implementar Scheduler Multitarea Preemptivo SMP APIC Timer en C++ Ring-0",
+                  "Implementar Compositor GUI VESA Framebuffer con Doble Buffer y Mouse PS/2",
+                  "Implementar Sistema de Archivos FAT32 y Ext2 en C++ freestanding",
+                  "Implementar Pila de Red TCP/IP y Driver Ethernet RTL8139/E1000 en C++",
+                  "Implementar Cargador de Ejecutables ELF64 y Syscalls Ring-3 en C++"
+              };
+              int idx1 = ($CURSOR_ACTUAL) % 8;
+              int idx2 = ($CURSOR_ACTUAL + 1) % 8;
+              g_ia_titan.responder_con_inteligencia_maxima(temas_osdev[idx1], true, out, sizeof(out));
+              g_ia_titan.responder_con_inteligencia_maxima(temas_osdev[idx2], true, out, sizeof(out));
               guardar_cerebro_completo("cerebro_omega.kkaf");
               return 0;
           }
@@ -54,7 +74,7 @@ jobs:
           ./kka_distill || true
           rm -f distill_llm.cpp kka_distill
 
-      - name: 📚 4. Leer siguientes 3 repositorios de 'repositorios.txt' y Entrenar
+      - name: 📚 4. Leer siguientes 3 repositorios de 'repositorios.txt' y Generar Shards
         run: |
           if [ ! -f repositorios.txt ]; then
             echo "limine-bootloader/limine" > repositorios.txt
@@ -69,6 +89,9 @@ jobs:
           fi
 
           if [ -z "$CURSOR" ] || [ "$CURSOR" -gt "$TOTAL_REPOS" ]; then
+            echo "🌐 Fin de la lista alcanzado. Descubriendo nuevos repositorios en GitHub API..."
+            curl -s "https://api.github.com/search/repositories?q=language:cpp+topic:osdev&sort=stars&per_page=15" \
+              | grep -o '"full_name": *"[^"]*"' | cut -d'"' -f4 >> repositorios.txt || true
             CURSOR=1
           fi
 
@@ -91,23 +114,34 @@ jobs:
             REPOS_APRENDIDOS="$REPOS_APRENDIDOS $SLUG"
           done
 
-          FILES=$(find /tmp/harvest -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) | head -n 300)
-          if [ -n "$FILES" ]; then
-            ./kka_trainer $FILES || true
+          find /tmp/harvest -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" -o -name "*.rs" -o -name "*.zig" -o -name "*.asm" \) | head -n 450 > /tmp/file_list.txt
+
+          if [ -s /tmp/file_list.txt ]; then
+            xargs -n 50 ./kka_trainer < /tmp/file_list.txt || true
           fi
+
+          # Mover cualquier shard generado a la carpeta 'shards/' y guardar el tomo de este lote!
+          mv -f cerebro_shard_*.kkaf shards/ 2>/dev/null || true
+          EXISTENTES=$(ls -1 shards/cerebro_shard_*.kkaf 2>/dev/null | wc -l || echo "0")
+          NEXT_SHARD_NUM=$((EXISTENTES + 1))
+          SHARD_NAME=$(printf "shards/cerebro_shard_%03d.kkaf" "$NEXT_SHARD_NUM")
+          cp -f cerebro_omega.kkaf "$SHARD_NAME"
+          echo "📦 Guardado nuevo Tomo en carpeta: $SHARD_NAME"
 
           NEXT_CURSOR=$((END_LINE + 1))
           echo "$NEXT_CURSOR" > progreso_repos.txt
           echo "$REPOS_APRENDIDOS" > /tmp/trained_names.txt
-          rm -f kka_trainer
+          rm -f kka_trainer /tmp/file_list.txt
 
-      - name: 💾 5. Guardar 'cerebro_omega.kkaf' (Con Anti-Colision Git)
+      - name: 💾 5. Subir carpeta 'shards/' + 'cerebro_omega.kkaf' a GitHub
         run: |
           APRENDIDOS=$(cat /tmp/trained_names.txt || echo "lote")
-          git config user.name "KKA-Zero TITAN Bot"
+          git config user.name "KKA-Zero Multi-Shard Bot"
           git config user.email "kka-bot@users.noreply.github.com"
-          git add cerebro_omega.kkaf progreso_repos.txt repositorios.txt
-          git diff --staged --quiet || git commit -m "🧠 TITAN-12B [$APRENDIDOS] -> Cursor $(cat progreso_repos.txt)"
+
+          git add -f cerebro_omega.kkaf shards/*.kkaf progreso_repos.txt repositorios.txt
+          NUM_SHARDS=$(ls -1 shards/cerebro_shard_*.kkaf 2>/dev/null | wc -l || echo "1")
+          git diff --staged --quiet || git commit -m "🧠 Carpeta shards/ ($NUM_SHARDS Tomos) [$APRENDIDOS] -> Cursor $(cat progreso_repos.txt)"
           git pull --rebase -X ours origin main || true
           git push origin main
           

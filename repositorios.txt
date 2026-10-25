@@ -1,0 +1,50 @@
+# ============================================================================
+# COLA DE ENTRENAMIENTO INFINITO PARA KKA-ZERO (entrrenamiento/IACoder)
+# Puedes escribir "usuario/repositorio" o la URL completa de GitHub.
+# Las lineas con '#' se ignoran. El robot toma de a 3 por turno!
+# ============================================================================
+
+# --- 1. SISTEMAS OPERATIVOS, KERNELS Y BOOTLOADERS (Ring-0 / Bare-Metal) ---
+limine-bootloader/limine
+mit-pdos/xv6-riscv
+mit-pdos/xv6-public
+cfenollosa/os-tutorial
+FreeRTOS/FreeRTOS-Kernel
+SerenityOS/serenity
+klange/toaruos
+littleosbook/littleosbook
+dreamportdev/Osdev-Notes
+
+# --- 2. MOTORES 3D LEGENDARIOS Y BIT-HACKS (Quake, Doom, Raylib) ---
+id-Software/Quake-III-Arena
+id-Software/DOOM
+id-Software/Quake
+raysan5/raylib
+ssloy/tinyrenderer
+OneLoneCoder/olcPixelGameEngine
+
+# --- 3. INTERFACES GRAFICAS LIGERAS PARA EMBEDDED / OS (GUI sin dependencias) ---
+lvgl/lvgl
+Immediate-Mode-UI/Nuklear
+ocornut/imgui
+fltk/fltk
+
+# --- 4. MOTORES DE IA Y COMPILADORES EN C/C++ PURO ---
+ggerganov/llama.cpp
+ggerganov/ggml
+karpathy/llama2.c
+fabricebellard/tcc
+rui314/chibicc
+
+# --- 5. LIBRERIAS STANDARD FREESTANDING Y ALGORITMOS ---
+eblot/newlib
+RichFelker/musl-mirror
+TheAlgorithms/C-Plus-Plus
+TheAlgorithms/C
+TheAlgorithms/Rust
+
+# --- 6. RUST, ZIG Y ASSEMBLER DE BAJO NIVEL ---
+phil-opp/blog_os
+rust-embedded/embedded-hal
+ziglang/zig
+netwide-assembler/nasm
